@@ -5,22 +5,21 @@ use std::ffi::CStr;
 use std::mem::size_of;
 
 #[no_mangle]
-pub extern "C" fn print_all_users(h: bool, g: bool) {
-    unsafe {
-        let mut entries = getutxent();
+pub fn print_all_users(h: bool, g: bool) {
+        let mut entries = unsafe { getutxent() };
 
         while !entries.is_null() {
-            let entry = *entries;
+            let entry = unsafe { *entries };
 
             if entry.ut_type != USER_PROCESS {
-                entries = getutxent();
+                entries = unsafe { getutxent() };
                 continue;
             }
 
-            let userinfo = *getpwnam(entry.ut_user.as_ptr() as *const i8);
+            let userinfo = unsafe { *getpwnam(entry.ut_user.as_ptr() as *const i8) };
 
             let username = get_username(entry);
-            let groups = get_groups(&entry, &userinfo);
+            let groups = unsafe { get_groups(&entry, &userinfo) };
             let hosts = get_hosts(&entry);
 
             let console_out = username;
@@ -38,16 +37,18 @@ pub extern "C" fn print_all_users(h: bool, g: bool) {
             };
 
             println!("{console_out}");
-            entries = getutxent();
+            entries = unsafe { getutxent() };
         }
-    }
+    
 }
 
 fn i8_array_to_string(arr: &[i8]) -> String {
-    arr.into_iter()
-        .map(|char_as_i8| *char_as_i8 as u8 as char)
-        .filter(|c| c != &'\0')
-        .collect::<String>()
+    let u8_arr: Vec<u8> = arr.iter().map(|&x| x.try_into().expect("Wartość powinna zostać skonwertowana poprawnie.")).collect();
+    u8_array_to_string(&u8_arr)
+}
+
+fn u8_array_to_string(arr: &[u8]) -> String {
+    String::from_utf8_lossy(arr).into_owned()
 }
 
 fn get_username(u: utmpx) -> String {
@@ -59,8 +60,8 @@ fn get_hosts(u: &utmpx) -> String {
     format!("({})", i8_array_to_string(&u.ut_host))
 }
 
-fn get_groups(u: &utmpx, p: &passwd) -> String {
-    unsafe {
+unsafe fn get_groups(u: &utmpx, p: &passwd) -> String {
+    
         let mut n = 0;
 
         let n_groups: *mut i32 = &mut n;
@@ -91,7 +92,7 @@ fn get_groups(u: &utmpx, p: &passwd) -> String {
             .collect::<Vec<String>>();
 
         format!("[{}]", group_names.join(", "))
-    }
+    
 }
 
 // funkcja pomocnicza konwertująca wskaźnik na wartość reprezentującą albo string, albo nic, jeżeli operacja się nie powiedzie.
